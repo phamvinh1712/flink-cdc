@@ -308,7 +308,7 @@ class PostgreSQLConnectorITCase extends PostgresTestBase {
     @ParameterizedTest
     @ValueSource(booleans = {true})
     public void testStartupFromCommittedOffset(boolean parallelismSnapshot) throws Exception {
-        setup(true);
+        setup(parallelismSnapshot);
         initializePostgresTable(POSTGRES_CONTAINER, "inventory");
         try (Connection connection = getJdbcConnection(POSTGRES_CONTAINER);
                 Statement statement = connection.createStatement()) {
@@ -323,8 +323,18 @@ class PostgreSQLConnectorITCase extends PostgresTestBase {
         String slotName = getSlotName();
         try (Connection connection = getJdbcConnection(POSTGRES_CONTAINER);
                 Statement statement = connection.createStatement()) {
-            // TODO: Remove it after adding publication to an existing replication slot.
-            statement.execute("CREATE PUBLICATION dbz_publication FOR TABLE inventory.products");
+            // Create a PUBLICATION if dbz_publication does not exist
+            statement.execute(
+                    "DO $$\n"
+                            + "BEGIN\n"
+                            + "    IF NOT EXISTS (\n"
+                            + "        SELECT 1\n"
+                            + "        FROM pg_publication\n"
+                            + "        WHERE pubname = 'dbz_publication'\n"
+                            + "    ) THEN\n"
+                            + "        CREATE PUBLICATION dbz_publication FOR TABLE inventory.products;\n"
+                            + "    END IF;\n"
+                            + "END $$;");
             statement.execute(
                     String.format(
                             "select pg_create_logical_replication_slot('%s','pgoutput');",
